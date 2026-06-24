@@ -18,8 +18,11 @@ export interface Expense {
   amount: number;
   description: string;
   date: string;
-  categoryId: number;
-  category?: Category;
+  userName: string;
+  categoryName: string;
+  categoryId?: number;
+  recurring: boolean;
+  frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY' | null;
 }
 
 export interface PageResponse<T> {
@@ -34,17 +37,24 @@ export interface PageResponse<T> {
 }
 
 export interface BudgetStatus {
-  totalBudget: number;
-  totalSpent: number;
+  budget: number;
+  spent: number;
   remaining: number;
-  utilizationPercentage: number;
+  percentageUsed: number;
+}
+
+export interface Budget {
+  id?: number;
+  amount: number;
+  month: number;
+  year: number;
 }
 
 export interface DashboardSummary {
-  totalSpending: number;
+  totalExpense: number;
   expenseCount: number;
-  averageExpense: number;
   highestExpense: number;
+  averageExpense: number;
 }
 
 export interface CategorySummary {
@@ -53,6 +63,15 @@ export interface CategorySummary {
 }
 
 export interface MonthlySummary {
-  month: string;
+  month: number;
   totalAmount: number;
+}
+
+export interface ExpenseRequest {
+  amount: number;
+  description: string;
+  date: string;
+  categoryId: number;
+  recurring: boolean;
+  frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY' | null;
 }

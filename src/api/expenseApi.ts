@@ -1,15 +1,15 @@
 import { apiClient } from './axios';
-import type { Expense, PageResponse, DashboardSummary, CategorySummary, MonthlySummary } from '../types';
+import type { Expense, ExpenseRequest, PageResponse, DashboardSummary, CategorySummary, MonthlySummary } from '../types';
 
 export const expenseApi = {
   getExpenses: async (page = 0, size = 50, sortBy = 'date', direction = 'desc'): Promise<PageResponse<Expense>> => {
-    const response = await apiClient.get<PageResponse<Expense>>(`/expenses`, {
+    const response = await apiClient.get<PageResponse<Expense>>('/expenses', {
       params: { page, size, sortBy, direction }
     });
     return response.data;
   },
   
-  createExpense: async (data: Omit<Expense, 'id' | 'category'>): Promise<Expense> => {
+  createExpense: async (data: ExpenseRequest): Promise<Expense> => {
     const response = await apiClient.post<Expense>('/expenses', data);
     return response.data;
   },
@@ -19,7 +19,7 @@ export const expenseApi = {
     return response.data;
   },
   
-  updateExpense: async (id: number, data: Omit<Expense, 'id' | 'category'>): Promise<Expense> => {
+  updateExpense: async (id: number, data: ExpenseRequest): Promise<Expense> => {
     const response = await apiClient.put<Expense>(`/expenses/${id}`, data);
     return response.data;
   },

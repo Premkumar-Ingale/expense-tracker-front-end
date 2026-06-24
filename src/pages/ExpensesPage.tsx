@@ -5,7 +5,7 @@ import * as z from 'zod';
 import { expenseApi } from '../api/expenseApi';
 import { categoryApi } from '../api/categoryApi';
 import type { Expense, Category } from '../types';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
+import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
@@ -18,9 +18,9 @@ const expenseSchema = z.object({
   amount: z.coerce.number().positive('Amount must be positive'),
   date: z.string().min(1, 'Date is required'),
   categoryId: z.coerce.number().positive('Category is required'),
+  recurring: z.boolean().optional(),
+  frequency: z.string().optional(),
 });
-
-type ExpenseFormValues = z.infer<typeof expenseSchema>;
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -29,9 +29,11 @@ export default function ExpensesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
+  const { register, handleSubmit, reset, watch, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(expenseSchema),
   });
+
+  const isRecurring = watch('recurring');
 
   const fetchData = async () => {
     try {
@@ -55,17 +57,28 @@ export default function ExpensesPage() {
 
   const openAddModal = () => {
     setEditingExpense(null);
-    reset({ description: '', amount: 0, date: new Date().toISOString().split('T')[0], categoryId: 0 as any });
+    reset({ 
+      description: '', 
+      amount: '', 
+      date: new Date().toISOString().split('T')[0], 
+      categoryId: '',
+      recurring: false,
+      frequency: '',
+    });
     setIsModalOpen(true);
   };
 
   const openEditModal = (expense: Expense) => {
     setEditingExpense(expense);
+    // Find the category ID from the category name
+    const matchedCategory = categories.find(c => c.name === expense.categoryName);
     reset({
       description: expense.description,
       amount: expense.amount,
       date: expense.date,
-      categoryId: expense.categoryId || expense.category?.id || 0,
+      categoryId: matchedCategory?.id || '',
+      recurring: expense.recurring || false,
+      frequency: expense.frequency || '',
     });
     setIsModalOpen(true);
   };
@@ -83,15 +96,24 @@ export default function ExpensesPage() {
 
   const onSubmit = async (data: any) => {
     try {
+      const payload = {
+        amount: data.amount,
+        description: data.description,
+        date: data.date,
+        categoryId: Number(data.categoryId),
+        recurring: data.recurring || false,
+        frequency: data.recurring ? (data.frequency || null) : null,
+      };
       if (editingExpense) {
-        await expenseApi.updateExpense(editingExpense.id, data);
+        await expenseApi.updateExpense(editingExpense.id, payload);
       } else {
-        await expenseApi.createExpense(data);
+        await expenseApi.createExpense(payload);
       }
       setIsModalOpen(false);
       fetchData();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to save expense", err);
+      alert(err.response?.data?.message || 'Failed to save expense.');
     }
   };
 
@@ -109,17 +131,6 @@ export default function ExpensesPage() {
 
       <Card>
         <CardContent className="p-0">
-          <div className="p-4 border-b border-border flex items-center gap-4">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={18} />
-              <input 
-                type="text" 
-                placeholder="Search expenses..." 
-                className="w-full pl-10 pr-4 py-2 rounded-lg border border-border bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm"
-              />
-            </div>
-          </div>
-          
           {loading ? (
             <div className="p-8 text-center text-text-muted">Loading expenses...</div>
           ) : expenses.length === 0 ? (
@@ -140,6 +151,7 @@ export default function ExpensesPage() {
                     <th className="px-6 py-4 text-xs font-medium text-text-muted uppercase tracking-wider">Description</th>
                     <th className="px-6 py-4 text-xs font-medium text-text-muted uppercase tracking-wider">Category</th>
                     <th className="px-6 py-4 text-xs font-medium text-text-muted uppercase tracking-wider text-right">Amount</th>
+                    <th className="px-6 py-4 text-xs font-medium text-text-muted uppercase tracking-wider text-center">Recurring</th>
                     <th className="px-6 py-4 text-xs font-medium text-text-muted uppercase tracking-wider text-right">Actions</th>
                   </tr>
                 </thead>
@@ -150,11 +162,18 @@ export default function ExpensesPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-text-main">{expense.description}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                          {expense.category?.name || 'Uncategorized'}
+                          {expense.categoryName || 'Uncategorized'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-text-main text-right">
                         {formatCurrency(expense.amount)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-text-muted text-center">
+                        {expense.recurring ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            {expense.frequency || 'Yes'}
+                          </span>
+                        ) : '—'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button onClick={() => openEditModal(expense)} className="text-primary hover:text-primary-hover mx-2 transition-colors">
@@ -183,7 +202,7 @@ export default function ExpensesPage() {
             label="Description"
             placeholder="e.g. Grocery shopping"
             {...register('description')}
-            error={errors.description?.message}
+            error={errors.description?.message as string}
           />
           <div className="grid grid-cols-2 gap-4">
             <Input
@@ -191,22 +210,42 @@ export default function ExpensesPage() {
               type="number"
               step="0.01"
               {...register('amount')}
-              error={errors.amount?.message}
+              error={errors.amount?.message as string}
             />
             <Input
               label="Date"
               type="date"
               {...register('date')}
-              error={errors.date?.message}
+              error={errors.date?.message as string}
             />
           </div>
           <Select
             label="Category"
             options={categories.map(c => ({ label: c.name, value: c.id }))}
             {...register('categoryId')}
-            error={errors.categoryId?.message}
+            error={errors.categoryId?.message as string}
             defaultValue=""
           />
+
+          <div className="flex items-center gap-3 pt-2">
+            <input type="checkbox" id="recurring" {...register('recurring')} className="w-4 h-4 rounded border-border text-primary focus:ring-primary" />
+            <label htmlFor="recurring" className="text-sm font-medium text-text-main">Recurring Expense</label>
+          </div>
+          
+          {isRecurring && (
+            <Select
+              label="Frequency"
+              options={[
+                { label: 'Daily', value: 'DAILY' },
+                { label: 'Weekly', value: 'WEEKLY' },
+                { label: 'Monthly', value: 'MONTHLY' },
+              ]}
+              {...register('frequency')}
+              error={errors.frequency?.message as string}
+              defaultValue=""
+            />
+          )}
+
           <div className="pt-4 flex justify-end gap-3">
             <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)}>Cancel</Button>
             <Button type="submit" isLoading={isSubmitting}>

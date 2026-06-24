@@ -95,7 +95,7 @@ export default function DashboardPage() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Total Spending" value={formatCurrency(dashboardSummary?.totalSpending || 0)} icon={CreditCard} delay={0.1} />
+        <StatCard title="Total Spending" value={formatCurrency(dashboardSummary?.totalExpense || 0)} icon={CreditCard} delay={0.1} />
         <StatCard title="Expense Count" value={dashboardSummary?.expenseCount || 0} icon={Activity} delay={0.2} />
         <StatCard title="Average Expense" value={formatCurrency(dashboardSummary?.averageExpense || 0)} icon={PieChartIcon} delay={0.3} />
         <StatCard title="Highest Expense" value={formatCurrency(dashboardSummary?.highestExpense || 0)} icon={TrendingUp} delay={0.4} />
@@ -199,7 +199,7 @@ export default function DashboardPage() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-text-muted">{expense.date}</td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                            {expense.category?.name || 'Uncategorized'}
+                            {expense.categoryName || 'Uncategorized'}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-text-main text-right">
@@ -223,16 +223,16 @@ export default function DashboardPage() {
               <div>
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-text-muted">Total Budget</span>
-                  <span className="font-medium text-text-main">{formatCurrency(budgetStatus?.totalBudget || 0)}</span>
+                  <span className="font-medium text-text-main">{formatCurrency(budgetStatus?.budget || 0)}</span>
                 </div>
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-text-muted">Spent</span>
-                  <span className="font-medium text-text-main">{formatCurrency(budgetStatus?.totalSpent || 0)}</span>
+                  <span className="font-medium text-text-main">{formatCurrency(budgetStatus?.spent || 0)}</span>
                 </div>
               </div>
               
               <div className="w-full bg-slate-100 rounded-full h-2.5 mb-4 dark:bg-gray-700">
-                <div className="bg-primary h-2.5 rounded-full" style={{ width: `${budgetStatus?.utilizationPercentage || 0}%` }}></div>
+                <div className="bg-primary h-2.5 rounded-full" style={{ width: `${Math.min(budgetStatus?.percentageUsed || 0, 100)}%` }}></div>
               </div>
               
               <div className="flex justify-between items-center text-sm">

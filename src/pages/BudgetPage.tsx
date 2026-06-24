@@ -15,8 +15,6 @@ const budgetSchema = z.object({
   amount: z.coerce.number().positive('Budget amount must be positive'),
 });
 
-type BudgetFormValues = z.infer<typeof budgetSchema>;
-
 export default function BudgetPage() {
   const [budgetStatus, setBudgetStatus] = useState<BudgetStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -30,7 +28,7 @@ export default function BudgetPage() {
       setLoading(true);
       const res = await budgetApi.getBudgetStatus();
       setBudgetStatus(res);
-      reset({ amount: res.totalBudget });
+      reset({ amount: res.budget });
     } catch (err) {
       console.error("Failed to fetch budget status", err);
     } finally {
@@ -44,7 +42,12 @@ export default function BudgetPage() {
 
   const onSubmit = async (data: any) => {
     try {
-      await budgetApi.createOrUpdateBudget(data);
+      const now = new Date();
+      await budgetApi.createOrUpdateBudget({
+        amount: data.amount,
+        month: now.getMonth() + 1, // Java months are 1-based
+        year: now.getFullYear(),
+      });
       fetchBudget();
       alert('Budget updated successfully!');
     } catch (err) {
@@ -52,9 +55,9 @@ export default function BudgetPage() {
     }
   };
 
-  const utilization = budgetStatus?.utilizationPercentage || 0;
+  const utilization = budgetStatus?.percentageUsed || 0;
   const isOverBudget = utilization > 100;
-  const progressColor = isOverBudget ? 'bg-danger' : utilization > 80 ? 'bg-f59e0b' : 'bg-success';
+  const progressColor = isOverBudget ? 'bg-red-500' : utilization > 80 ? 'bg-amber-500' : 'bg-emerald-500';
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -84,7 +87,7 @@ export default function BudgetPage() {
                 type="number"
                 step="0.01"
                 {...register('amount')}
-                error={errors.amount?.message}
+                error={errors.amount?.message as string}
                 placeholder="e.g. 50000"
               />
               
@@ -110,10 +113,10 @@ export default function BudgetPage() {
                 <div className="flex flex-col items-center justify-center py-4">
                   <span className="text-sm font-medium text-text-muted">You have spent</span>
                   <span className="text-4xl font-bold text-text-main mt-1">
-                    {formatCurrency(budgetStatus?.totalSpent || 0)}
+                    {formatCurrency(budgetStatus?.spent || 0)}
                   </span>
                   <span className="text-sm text-text-muted mt-1">
-                    out of {formatCurrency(budgetStatus?.totalBudget || 0)}
+                    out of {formatCurrency(budgetStatus?.budget || 0)}
                   </span>
                 </div>
 
@@ -136,7 +139,7 @@ export default function BudgetPage() {
                   <div className="flex items-center gap-3">
                     <div className={cn(
                       "w-10 h-10 rounded-full flex items-center justify-center",
-                      isOverBudget ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success'
+                      isOverBudget ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'
                     )}>
                       {isOverBudget ? <AlertTriangle size={20} /> : <Target size={20} />}
                     </div>
@@ -146,7 +149,7 @@ export default function BudgetPage() {
                       </p>
                       <p className={cn(
                         "text-lg font-bold",
-                        isOverBudget ? 'text-danger' : 'text-success'
+                        isOverBudget ? 'text-red-600' : 'text-emerald-600'
                       )}>
                         {isOverBudget 
                           ? `+${formatCurrency(Math.abs(budgetStatus?.remaining || 0))}` 
