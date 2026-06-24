@@ -39,3 +39,20 @@ export interface BudgetStatus {
   remaining: number;
   utilizationPercentage: number;
 }
+
+export interface DashboardSummary {
+  totalSpending: number;
+  expenseCount: number;
+  averageExpense: number;
+  highestExpense: number;
+}
+
+export interface CategorySummary {
+  categoryName: string;
+  totalAmount: number;
+}
+
+export interface MonthlySummary {
+  month: string;
+  totalAmount: number;
+}

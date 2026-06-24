@@ -2,17 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { expenseApi } from '../api/expenseApi';
 import { budgetApi } from '../api/budgetApi';
-import type { Expense, BudgetStatus } from '../types';
+import type { Expense, BudgetStatus, DashboardSummary, CategorySummary, MonthlySummary } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { format, subDays } from 'date-fns';
 import { TrendingUp, CreditCard, PieChart as PieChartIcon, Activity } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { formatCurrency } from '../utils/formatCurrency';
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
 
 export default function DashboardPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [budgetStatus, setBudgetStatus] = useState<BudgetStatus | null>(null);
+  const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary | null>(null);
+  const [categorySummary, setCategorySummary] = useState<CategorySummary[]>([]);
+  const [monthlySummary, setMonthlySummary] = useState<MonthlySummary[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Note: For a real app, these would come from specific summary endpoints.
@@ -35,16 +39,19 @@ export default function DashboardPage() {
       try {
         setLoading(true);
         // Fetch recent expenses
-        const expRes = await expenseApi.getExpenses(0, 5, 'date', 'desc');
-        setExpenses(expRes.content);
+        const [expRes, budRes, dashSum, catSum, monthSum] = await Promise.all([
+          expenseApi.getExpenses(0, 5, 'date', 'desc').catch(() => ({ content: [] as Expense[] })),
+          budgetApi.getBudgetStatus().catch(() => null),
+          expenseApi.getDashboardSummary().catch(() => null),
+          expenseApi.getCategorySummary().catch(() => [] as CategorySummary[]),
+          expenseApi.getMonthlySummary(new Date().getFullYear()).catch(() => [] as MonthlySummary[])
+        ]);
         
-        // Fetch budget
-        try {
-          const budRes = await budgetApi.getBudgetStatus();
-          setBudgetStatus(budRes);
-        } catch (e) {
-          console.error("Budget API error", e);
-        }
+        setExpenses((expRes as any).content || []);
+        setBudgetStatus(budRes as BudgetStatus | null);
+        setDashboardSummary(dashSum as DashboardSummary | null);
+        setCategorySummary(catSum as CategorySummary[]);
+        setMonthlySummary(monthSum as MonthlySummary[]);
       } catch (err) {
         console.error("Failed to load dashboard data", err);
       } finally {
@@ -88,10 +95,10 @@ export default function DashboardPage() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Total Spending" value="$2,450.00" icon={CreditCard} delay={0.1} />
-        <StatCard title="Expense Count" value={expenses.length || 0} icon={Activity} delay={0.2} />
-        <StatCard title="Average Expense" value="$125.00" icon={PieChartIcon} delay={0.3} />
-        <StatCard title="Highest Expense" value="$450.00" icon={TrendingUp} delay={0.4} />
+        <StatCard title="Total Spending" value={formatCurrency(dashboardSummary?.totalSpending || 0)} icon={CreditCard} delay={0.1} />
+        <StatCard title="Expense Count" value={dashboardSummary?.expenseCount || 0} icon={Activity} delay={0.2} />
+        <StatCard title="Average Expense" value={formatCurrency(dashboardSummary?.averageExpense || 0)} icon={PieChartIcon} delay={0.3} />
+        <StatCard title="Highest Expense" value={formatCurrency(dashboardSummary?.highestExpense || 0)} icon={TrendingUp} delay={0.4} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -103,14 +110,15 @@ export default function DashboardPage() {
           <CardContent className="p-6">
             <div className="h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={mockTrendData}>
+                <LineChart data={(monthlySummary.length > 0 ? monthlySummary : mockTrendData) as any}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dx={-10} tickFormatter={(value) => `$${value}`} />
+                  <XAxis dataKey={monthlySummary.length > 0 ? 'month' : 'name'} axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dx={-10} tickFormatter={(value) => `₹${value}`} />
                   <RechartsTooltip 
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                    formatter={(value: any) => formatCurrency(Number(value))}
                   />
-                  <Line type="monotone" dataKey="amount" stroke="#6366f1" strokeWidth={3} dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
+                  <Line type="monotone" dataKey={monthlySummary.length > 0 ? 'totalAmount' : 'amount'} stroke="#6366f1" strokeWidth={3} dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -127,28 +135,30 @@ export default function DashboardPage() {
               <ResponsiveContainer width="100%" height="80%">
                 <PieChart>
                   <Pie
-                    data={mockCategoryData}
+                    data={categorySummary.length > 0 ? categorySummary : mockCategoryData}
                     cx="50%"
                     cy="50%"
                     innerRadius={60}
                     outerRadius={80}
                     paddingAngle={5}
-                    dataKey="value"
+                    dataKey={categorySummary.length > 0 ? 'totalAmount' : 'value'}
+                    nameKey={categorySummary.length > 0 ? 'categoryName' : 'name'}
                   >
-                    {mockCategoryData.map((_, index) => (
+                    {(categorySummary.length > 0 ? categorySummary : mockCategoryData).map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                   <RechartsTooltip 
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                    formatter={(value: any) => formatCurrency(Number(value))}
                   />
                 </PieChart>
               </ResponsiveContainer>
               <div className="w-full mt-4 flex flex-wrap gap-2 justify-center">
-                {mockCategoryData.map((entry, index) => (
-                  <div key={entry.name} className="flex items-center text-xs text-text-muted">
+                {(categorySummary.length > 0 ? categorySummary : mockCategoryData).map((entry: any, index: number) => (
+                  <div key={entry.categoryName || entry.name} className="flex items-center text-xs text-text-muted">
                     <span className="w-3 h-3 rounded-full mr-1.5" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>
-                    {entry.name}
+                    {entry.categoryName || entry.name}
                   </div>
                 ))}
               </div>
@@ -193,7 +203,7 @@ export default function DashboardPage() {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-text-main text-right">
-                          ${expense.amount.toFixed(2)}
+                          {formatCurrency(expense.amount)}
                         </td>
                       </tr>
                     ))}
@@ -213,21 +223,21 @@ export default function DashboardPage() {
               <div>
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-text-muted">Total Budget</span>
-                  <span className="font-medium text-text-main">${budgetStatus?.totalBudget || 5000}</span>
+                  <span className="font-medium text-text-main">{formatCurrency(budgetStatus?.totalBudget || 0)}</span>
                 </div>
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-text-muted">Spent</span>
-                  <span className="font-medium text-text-main">${budgetStatus?.totalSpent || 2450}</span>
+                  <span className="font-medium text-text-main">{formatCurrency(budgetStatus?.totalSpent || 0)}</span>
                 </div>
               </div>
               
               <div className="w-full bg-slate-100 rounded-full h-2.5 mb-4 dark:bg-gray-700">
-                <div className="bg-primary h-2.5 rounded-full" style={{ width: `${budgetStatus?.utilizationPercentage || 49}%` }}></div>
+                <div className="bg-primary h-2.5 rounded-full" style={{ width: `${budgetStatus?.utilizationPercentage || 0}%` }}></div>
               </div>
               
               <div className="flex justify-between items-center text-sm">
                 <span className="text-text-muted font-medium">Remaining</span>
-                <span className="font-bold text-success text-lg">${budgetStatus?.remaining || 2550}</span>
+                <span className="font-bold text-success text-lg">{formatCurrency(budgetStatus?.remaining || 0)}</span>
               </div>
             </div>
           </CardContent>
